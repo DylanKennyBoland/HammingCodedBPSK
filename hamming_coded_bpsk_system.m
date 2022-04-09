@@ -1,6 +1,7 @@
 %% Digital Communications (EEEN40060) Assignment 2:
 % This program attempts to simulate a Hamming-coded Binary Phase-Shift
-% Keying (BPSK) system.
+% Keying (BPSK) system. It also makes a comparison with a non-encoded BPSK
+% system. The channel model used is AWGN (Additive white Gaussian noise).
 %
 % Author: Dylan Boland (Student)
 
@@ -19,7 +20,7 @@ else % in case the user wants to use RGB triplets instead...
     theoreticalBERcolour = [0.3 0 1];
 end
 
-numDataBits = 100000; % should be a multiple of 4 for convenience
+numDataBits = 48000; % should be a multiple of 4 for convenience
 numDataBits = numDataBits - mod(numDataBits, 4); % help make divisible by 4
 txBits = randi([0 1], 1, numDataBits); % our bitstream...
 
@@ -63,7 +64,7 @@ Es = mean(abs(txStream).^2); % average symbol energy
 Eb = Es; % average energy in a transmit bit
 r = msgWordLen/codeWordLen; % the code rate
 
-EbNo = 10.^(-1:0.05:3); % a vector of Eb/No values
+EbNo = 10.^(-1:0.2:3); % a vector of Eb/No values
 No = Eb./(r*EbNo); % the corresponding vector of No values based on the value of Eb...
 
 simulatedBER = zeros(length(No), 1); % a vector to hold the BER values
@@ -77,7 +78,7 @@ for j = 1:length(No)
     rxStream = txStream + n; % the received stream
     % Demodulation stage. The decision boundary is half way between 1 and
     % -1 - i.e., 0.
-    rxBits = double(rxStream > 0); % this line will return a "logical" vector. If a
+    rxBits = double(rxStream > 0); % this line will return a vector of 0s and 1s. If a
     % given element of "rxStream" is to the right of "0", the corresponding
     % element in "rxBits" will be 1, as we would want. Likewise, if a given
     % element in "rxStream" is to the left of 0, then after this comparison
@@ -86,7 +87,10 @@ for j = 1:length(No)
     % and a 0 mapped to a "-1":
     rxBlock = reshape(rxBits, codeWordLen, numBlocks);
     for block = 1:numBlocks
-        s = mod(sum(rxBlock(:, block).*H', 1), 2);
+        s = mod(sum(rxBlock(:, block).*H', 1), 2); % compute the Syndrome (s)
+        % Instead of calling the mod() and sum() function on each iteration
+        % of the current for loop, we will wait until we exit, and then
+        % call the mod() function once on the rxBlock matrix:
         switch num2str(s)
             case "0  0  1"
                 rxBlock(:, block) = rxBlock(:, block) + [0, 0, 1, 0, 0, 0, 0]';
@@ -104,10 +108,14 @@ for j = 1:length(No)
                 rxBlock(:, block) = rxBlock(:, block) + [0, 0, 0, 0, 0, 1, 0]';
         end   
     end
+    % Now we modulo division by 2, once, on the received block...
     rxBlock = mod(rxBlock, 2);
-    msgRxBlock = rxBlock(msgWordLen:end, :);
+    % We used a systematic encoder. This means that after a message word is
+    % encoded, it appears either at the beginning or end of the codeword.
+    % In our case, it appears at the end of the codeword:
+    msgRxBlock = rxBlock(msgWordLen:end, :); % extract the message words
     numErrors = numDataBits - sum(msgRxBlock(:) == txBits(:));
-    simulatedBER(j) = numErrors/numDataBits;
+    simulatedBER(j) = numErrors/numDataBits; % add BER value to vector
 end
 
 theoreticalBER = qfunc(sqrt(2*EbNo)); % compute the theoretical BER values
